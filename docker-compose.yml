@@ -32,3 +32,35 @@ services:
       options:
         max-size: "20m"
         max-file: "5"
+
+  # TLS + auth front door. Only starts with the "tls" profile:
+  #     docker compose --profile tls up -d
+  # Set BIND=127.0.0.1 in .env when using this, so the app is reachable only
+  # through Caddy and never directly.
+  caddy:
+    image: caddy:2-alpine
+    container_name: btczig-caddy
+    profiles: ["tls"]
+    depends_on: [btczig]
+    ports:
+      - "80:80"       # required for the ACME (Let's Encrypt) challenge
+      - "443:443"
+      - "443:443/udp" # HTTP/3
+    environment:
+      SITE_ADDRESS: "${SITE_ADDRESS:?set SITE_ADDRESS in .env}"
+      BASIC_AUTH_USER: "${BASIC_AUTH_USER:?set BASIC_AUTH_USER in .env}"
+      BASIC_AUTH_HASH: "${BASIC_AUTH_HASH:?set BASIC_AUTH_HASH in .env}"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data      # certificates live here - keep this volume
+      - caddy_config:/config
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  caddy_data:
+  caddy_config:

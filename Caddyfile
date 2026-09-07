@@ -1,0 +1,25 @@
+# Reverse proxy: TLS + auth in front, app never exposed directly.
+#
+# SITE_ADDRESS with no domain of your own:
+#   38-242-211-91.sslip.io      -> sslip.io resolves that to 38.242.211.91,
+#                                  and Let's Encrypt will issue a real cert
+#                                  for it, so you get proper HTTPS.
+# With your own domain, just use it: peg.example.com
+#
+# Ports 80 and 443 must be open (80 is needed for the ACME challenge).
+
+{$SITE_ADDRESS} {
+	encode gzip
+
+	basic_auth {
+		{$BASIC_AUTH_USER} {$BASIC_AUTH_HASH}
+	}
+
+	# reverse_proxy upgrades websockets automatically, which /stream needs
+	reverse_proxy btczig:5173
+
+	log {
+		output stdout
+		format console
+	}
+}
