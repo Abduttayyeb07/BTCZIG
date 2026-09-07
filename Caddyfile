@@ -6,7 +6,15 @@
 #                                  for it, so you get proper HTTPS.
 # With your own domain, just use it: peg.example.com
 #
-# Ports 80 and 443 must be open (80 is needed for the ACME challenge).
+# Port 443 must be open. Port 80 is optional -- see below.
+
+{
+	# Port 80 is frequently already taken by an existing nginx/apache. Disabling
+	# the HTTP->HTTPS redirect means Caddy never needs to bind 80, and it gets
+	# its certificate over the TLS-ALPN-01 challenge on 443 instead.
+	# Set CADDY_HTTP_PORT to something unused (e.g. 8080) in .env when 80 is busy.
+	auto_https disable_redirects
+}
 
 {$SITE_ADDRESS} {
 	encode gzip

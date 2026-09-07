@@ -43,7 +43,10 @@ services:
     profiles: ["tls"]
     depends_on: [btczig]
     ports:
-      - "80:80"       # required for the ACME (Let's Encrypt) challenge
+      # 443 does the real work (TLS + the TLS-ALPN-01 cert challenge).
+      # 80 is only for HTTP->HTTPS redirects; if something already owns it,
+      # set CADDY_HTTP_PORT=8080 in .env and everything still works.
+      - "${CADDY_HTTP_PORT:-80}:80"
       - "443:443"
       - "443:443/udp" # HTTP/3
     environment:
