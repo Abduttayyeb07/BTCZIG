@@ -10,6 +10,7 @@
     "report": "node -e \"fetch('http://127.0.0.1:5173/api/report?format=text').then(r=>r.text()).then(console.log).catch(()=>console.log('server not running - npm run docker:up'))\"",
     "health": "node -e \"fetch('http://127.0.0.1:5173/healthz').then(r=>r.json()).then(j=>console.log(JSON.stringify(j))).catch(()=>console.log('down'))\"",
     "mc": "node montecarlo.js 200 120",
+    "vendor": "node -e \"const fs=require('fs');const P='public/vendor';fs.mkdirSync(P,{recursive:true});const L={'klinecharts.min.js':'https://cdn.jsdelivr.net/npm/klinecharts@9.8.10/dist/umd/klinecharts.min.js','lightweight-charts.standalone.production.js':'https://cdn.jsdelivr.net/npm/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js'};(async()=>{for(const[f,u]of Object.entries(L)){const r=await fetch(u);if(!r.ok)throw new Error(f+' '+r.status);fs.writeFileSync(P+'/'+f,Buffer.from(await r.arrayBuffer()));console.log('ok',f)}})()\"",
     "docker:up": "docker compose up -d --build",
     "docker:logs": "docker compose logs -f",
     "docker:report": "docker compose logs --no-log-prefix | node -e \"let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const i=s.lastIndexOf('==== ZIG vs BTC');console.log(i<0?'no report yet':s.slice(i))})\"",
