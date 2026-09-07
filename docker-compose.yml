@@ -4,11 +4,12 @@ services:
     image: btczig-peg:latest
     container_name: btczig
 
-    # Published to loopback only. The app reaches it at 127.0.0.1:5173 on the
-    # host; nothing is exposed to the internet. Drop the "127.0.0.1:" prefix
-    # (or put a reverse proxy in front) if you need it reachable remotely.
+    # BIND controls exposure, HOST_PORT the port. Defaults are loopback-only.
+    #   BIND=127.0.0.1  -> reachable only from the server itself (safe default)
+    #   BIND=0.0.0.0    -> reachable from the internet; see the warning in .env.example
+    # Set both in a .env file next to this one.
     ports:
-      - "127.0.0.1:5173:5173"
+      - "${BIND:-127.0.0.1}:${HOST_PORT:-5173}:5173"
 
     # ledger + simulated bars live here, so `docker compose down && up` resumes
     volumes:
