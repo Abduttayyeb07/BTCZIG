@@ -9,10 +9,10 @@
 # Port 443 must be open. Port 80 is optional -- see below.
 
 {
-	# Port 80 is frequently already taken by an existing nginx/apache. Disabling
-	# the HTTP->HTTPS redirect means Caddy never needs to bind 80, and it gets
-	# its certificate over the TLS-ALPN-01 challenge on 443 instead.
-	# Set CADDY_HTTP_PORT to something unused (e.g. 8080) in .env when 80 is busy.
+	# Never bind port 80 -- it is usually already taken, and we don't need it.
+	# On 443 Caddy gets a real Let's Encrypt cert via TLS-ALPN-01.
+	# On any other port it uses its own internal CA (self-signed): still real
+	# encryption and real auth, but the browser shows a one-time warning.
 	auto_https disable_redirects
 }
 
