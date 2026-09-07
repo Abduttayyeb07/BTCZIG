@@ -1,19 +1,25 @@
-# Reverse proxy: TLS + auth in front, app never exposed directly.
+# Front door: password auth, app never exposed directly.
 #
-# SITE_ADDRESS with no domain of your own:
-#   38-242-211-91.sslip.io      -> sslip.io resolves that to 38.242.211.91,
-#                                  and Let's Encrypt will issue a real cert
-#                                  for it, so you get proper HTTPS.
-# With your own domain, just use it: peg.example.com
+# SITE_ADDRESS decides the mode.
 #
-# Port 443 must be open. Port 80 is optional -- see below.
+#   http://:8888                 <- works anywhere. Password-protected, but the
+#                                   traffic and password are NOT encrypted.
+#                                   Use this when ports 80/443 are taken or you
+#                                   have no domain.
+#
+#   https://peg.example.com      <- proper HTTPS with a real Let's Encrypt cert.
+#                                   Requires a DOMAIN (not a bare IP) and port
+#                                   443 free. Also delete the "auto_https off"
+#                                   line below when using this.
+#
+# Why not https:// on a bare IP? No public CA issues certificates for bare IPs,
+# and self-signed certs on an IP break because clients send no SNI for IP
+# addresses, so the server cannot select a certificate. It fails the handshake
+# outright -- that is the ERR_SSL_PROTOCOL_ERROR you get. Use a hostname.
 
 {
-	# Never bind port 80 -- it is usually already taken, and we don't need it.
-	# On 443 Caddy gets a real Let's Encrypt cert via TLS-ALPN-01.
-	# On any other port it uses its own internal CA (self-signed): still real
-	# encryption and real auth, but the browser shows a one-time warning.
-	auto_https disable_redirects
+	# Delete this line when SITE_ADDRESS is an https:// domain.
+	auto_https off
 }
 
 {$SITE_ADDRESS} {
