@@ -20,6 +20,9 @@ services:
       HOST: "0.0.0.0"      # must be 0.0.0.0 inside the container for the port map to work
       REPORT_MIN: "30"     # match report to the log every N minutes
       TZ: "UTC"
+      # 1 = block POST /api/engine. Set this whenever the URL is shared, so a
+      # viewer cannot reconfigure or reset a run that is being measured.
+      READONLY: "${READONLY:-0}"
 
     restart: unless-stopped
     stop_grace_period: 20s  # room to flush state and print the final report

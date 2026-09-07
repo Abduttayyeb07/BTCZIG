@@ -629,7 +629,17 @@ washBtn.addEventListener('click', async () => {
     });
   } catch {}
 });
-fetch('/api/engine').then((r) => r.json()).then((j) => { washOn = !!j.cfg.washEnabled; paintWashBtn(); }).catch(() => {});
+fetch('/api/engine').then((r) => r.json()).then((j) => {
+  washOn = !!j.cfg.washEnabled;
+  paintWashBtn();
+  if (j.readonly){
+    washBtn.disabled = true;
+    washBtn.style.opacity = 0.45;
+    washBtn.style.cursor = 'not-allowed';
+    washBtn.title = 'Read-only deployment — controls disabled';
+    document.getElementById('calib').textContent = 'read-only · ' + document.getElementById('calib').textContent;
+  }
+}).catch(() => {});
 
 (async function init(){
   setActive();

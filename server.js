@@ -24,6 +24,9 @@ const PORT = process.env.PORT || 5173;
 // 0.0.0.0 inside a container (the port mapping is what restricts exposure);
 // set HOST=127.0.0.1 to bind loopback only when running bare on a host.
 const HOST = process.env.HOST || '0.0.0.0';
+// READONLY=1 blocks POST /api/engine, so a publicly shared URL cannot be used
+// to reconfigure, reset, or wipe a run that is being measured.
+const READONLY = process.env.READONLY === '1';
 const SYMBOLS = ['ZIGUSDT', 'BTCUSDT'];
 const MEXC_REST = 'https://api.mexc.com';
 const MEXC_WS = 'wss://wbs-api.mexc.com/ws';
@@ -111,6 +114,11 @@ const server = http.createServer(async (req, res) => {
 
     if (url.pathname === '/api/engine') {
       if (req.method === 'POST') {
+        // READONLY=1 makes the deployment safe to share: viewers can watch
+        // everything, but nobody can reconfigure or reset a run in progress.
+        if (READONLY) {
+          return json(res, 403, { error: 'read-only deployment', hint: 'unset READONLY to allow control' });
+        }
         const body = await readBody(req);
         const cfg = sanitizeCfg(body);
         const wipe = body.reset === true;
@@ -125,7 +133,7 @@ const server = http.createServer(async (req, res) => {
         console.log(`[engine] reconfigured${needsRecalib ? ' (recalibrated)' : ' (live)'}`, JSON.stringify(cfg));
       }
       return json(res, 200, {
-        cfg: engine.cfg, ready: engine.ready, resumed: engine.resumed,
+        cfg: engine.cfg, ready: engine.ready, resumed: engine.resumed, readonly: READONLY,
         runtimeMs: engine.runtimeMs + (Date.now() - engine.startedAt),
         bars: engine.bars1m.length,
         calib: {
@@ -260,7 +268,7 @@ setInterval(() => {
 }, 15000);
 
 server.listen(PORT, HOST, () => {
-  console.log(`\n  ZIG peg engine  ->  http://127.0.0.1:${PORT}   (bound ${HOST}:${PORT})\n`);
+  console.log(`\n  ZIG peg engine  ->  http://127.0.0.1:${PORT}   (bound ${HOST}:${PORT})${READONLY ? '  [READ-ONLY]' : ''}\n`);
 });
 
 // ---------------------------------------------------------------------------
