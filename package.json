@@ -1,0 +1,26 @@
+{
+  "name": "btczig-live",
+  "version": "1.0.0",
+  "private": true,
+  "type": "commonjs",
+  "description": "MEXC spot: 30d 1h history + live protobuf kline/trade feed, ZIG vs BTC side-by-side candlestick charts with normalized overlay",
+  "scripts": {
+    "start": "node server.js",
+    "fresh": "node server.js --fresh",
+    "report": "node -e \"fetch('http://127.0.0.1:5173/api/report?format=text').then(r=>r.text()).then(console.log).catch(()=>console.log('server not running - npm run docker:up'))\"",
+    "health": "node -e \"fetch('http://127.0.0.1:5173/healthz').then(r=>r.json()).then(j=>console.log(JSON.stringify(j))).catch(()=>console.log('down'))\"",
+    "mc": "node montecarlo.js 200 120",
+    "docker:up": "docker compose up -d --build",
+    "docker:logs": "docker compose logs -f",
+    "docker:report": "docker compose logs --no-log-prefix | node -e \"let s='';process.stdin.on('data',d=>s+=d).on('end',()=>{const i=s.lastIndexOf('==== ZIG vs BTC');console.log(i<0?'no report yet':s.slice(i))})\"",
+    "docker:restart": "docker compose restart",
+    "docker:down": "docker compose down"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "protobufjs": "^7.4.0",
+    "ws": "^8.18.0"
+  }
+}

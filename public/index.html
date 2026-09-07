@@ -1,0 +1,643 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ZIG Peg Engine</title>
+<script src="/vendor/klinecharts.min.js"></script>
+<script src="/vendor/lightweight-charts.standalone.production.js"></script>
+<style>
+  :root{
+    --bg:#0b0e11; --pane:#0e1216; --line:#1c2127; --text:#eaecef; --muted:#848e9c;
+    --up:#0ecb81; --down:#f6465d; --accent:#f0b90b; --blue:#3fb6f0;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{background:var(--bg);color:var(--text);font:13px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Inter,Helvetica,Arial,sans-serif;overflow:hidden}
+  #app{display:flex;flex-direction:column;height:100vh}
+
+  header{display:flex;align-items:center;gap:20px;padding:8px 14px;border-bottom:1px solid var(--line);flex:0 0 auto}
+  .brand{font-weight:700;letter-spacing:.5px;color:var(--muted);white-space:nowrap}
+  .brand b{color:var(--accent)}
+  .tick{display:flex;align-items:baseline;gap:7px;padding:3px 9px;border-radius:6px;transition:background .15s}
+  .tick .sym{color:var(--muted);font-weight:600;white-space:nowrap}
+  .tick .px{font-size:15px;font-weight:700;font-variant-numeric:tabular-nums}
+  .tick .chg{font-size:11px;font-variant-numeric:tabular-nums}
+  .tick.flash-up{background:rgba(14,203,129,.16)}
+  .tick.flash-down{background:rgba(246,70,93,.16)}
+  .simchip{font-size:9px;font-weight:800;color:#0b0e11;background:var(--accent);border-radius:3px;padding:1px 4px;margin-left:4px;letter-spacing:.5px}
+  .status{margin-left:auto;display:flex;align-items:center;gap:7px;color:var(--muted);font-size:11px;white-space:nowrap}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--down);box-shadow:0 0 8px var(--down)}
+  .dot.on{background:var(--up);box-shadow:0 0 8px var(--up)}
+
+  .toolbar{display:flex;align-items:center;gap:3px;padding:5px 14px;border-bottom:1px solid var(--line);flex:0 0 auto}
+  .toolbar button{background:transparent;border:0;color:var(--muted);padding:4px 9px;border-radius:5px;font-size:12px;font-weight:600;cursor:pointer}
+  .toolbar button:hover{color:var(--text);background:#161b22}
+  .toolbar button.active{color:#0b0e11;background:var(--accent)}
+  .toolbar .spacer{flex:1}
+  .toolbar .calib{color:var(--muted);font-size:10px;font-variant-numeric:tabular-nums}
+
+  .charts{flex:1 1 auto;display:flex;min-height:0}
+  .panel{flex:1 1 50%;min-width:0;display:flex;flex-direction:column;position:relative;background:var(--bg);overflow:hidden}
+  .panel + .panel{border-left:1px solid var(--line)}
+  .kchart{flex:1;min-height:0}
+  .pname{position:absolute;top:6px;right:60px;z-index:6;color:var(--muted);font-size:10px;font-weight:700;letter-spacing:.4px;
+    background:rgba(11,14,17,.65);padding:2px 6px;border-radius:4px;pointer-events:none}
+  .pname .sim{color:var(--accent)}
+  .simwm{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;z-index:4;pointer-events:none;
+    font-weight:800;font-size:min(12vw,100px);letter-spacing:12px;color:var(--accent);opacity:.045;user-select:none}
+  .countdown{position:absolute;right:6px;bottom:30px;z-index:6;background:#161b22;border:1px solid var(--line);color:var(--muted);
+    font-size:10px;font-weight:600;padding:2px 5px;border-radius:4px;font-variant-numeric:tabular-nums;pointer-events:none}
+
+  /* ---- engine dashboard ---- */
+  .splitter{flex:0 0 5px;cursor:row-resize;background:var(--line);transition:background .12s}
+  .splitter:hover,.splitter.drag{background:var(--accent)}
+  .dash{flex:0 0 218px;display:flex;border-top:1px solid var(--line);min-height:0;overflow:hidden}
+  .dash.collapsed,.splitter.collapsed{display:none}
+  .dashL{flex:1 1 62%;min-width:0;display:flex;flex-direction:column;padding:8px 12px;gap:7px;overflow:hidden}
+  .dashR{flex:1 1 38%;min-width:0;border-left:1px solid var(--line);position:relative}
+  #normChart{position:absolute;inset:0}
+  .dashR .cap{position:absolute;top:5px;left:10px;z-index:5;color:var(--muted);font-size:10px;pointer-events:none}
+  .dashR .cap b.zig{color:var(--accent)} .dashR .cap b.btc{color:var(--blue)}
+
+  .tiles{display:grid;grid-template-columns:repeat(5,1fr);gap:6px}
+  .tile{background:var(--pane);border:1px solid var(--line);border-radius:5px;padding:5px 8px;min-width:0}
+  .tile .k{color:var(--muted);font-size:9px;text-transform:uppercase;letter-spacing:.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .tile .v{font-size:14px;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .tile .s{color:var(--muted);font-size:9px;font-variant-numeric:tabular-nums}
+
+  .botrow{display:flex;gap:8px;min-height:0;flex:1}
+  .verdict{flex:0 0 210px;border-radius:5px;padding:7px 10px;border:1px solid var(--line);display:flex;flex-direction:column;justify-content:center;gap:2px}
+  .verdict .vb{font-size:19px;font-weight:800;letter-spacing:1px}
+  .verdict .vr{font-size:10px;color:var(--muted);line-height:1.3}
+  .verdict .vs{font-size:11px;font-weight:600;font-variant-numeric:tabular-nums}
+  .v-ADD{background:rgba(14,203,129,.10);border-color:rgba(14,203,129,.45)} .v-ADD .vb{color:var(--up)}
+  .v-HOLD{background:rgba(240,185,11,.08);border-color:rgba(240,185,11,.4)} .v-HOLD .vb{color:var(--accent)}
+  .v-CAUTION{background:rgba(240,140,11,.10);border-color:rgba(240,140,11,.5)} .v-CAUTION .vb{color:#f0900b}
+  .v-STOP{background:rgba(246,70,93,.10);border-color:rgba(246,70,93,.5)} .v-STOP .vb{color:var(--down)}
+
+  .tape{flex:1;min-width:0;background:var(--pane);border:1px solid var(--line);border-radius:5px;padding:5px 8px;overflow:hidden}
+  .tape .th{color:var(--muted);font-size:9px;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px;display:flex;justify-content:space-between}
+  .tape .row{font-size:10.5px;font-variant-numeric:tabular-nums;display:flex;gap:8px;line-height:1.55;white-space:nowrap}
+  .tape .row .sd{width:30px;font-weight:700}
+  .tape .row .q{width:88px;text-align:right;color:var(--text)}
+  .tape .row .p{width:74px;text-align:right;color:var(--muted)}
+  .tape .row .n{width:64px;text-align:right;color:var(--muted)}
+  .tape .row .tm{color:#5e6673}
+  .buy{color:var(--up)} .sell{color:var(--down)}
+
+  .flowbar{height:4px;border-radius:2px;background:var(--down);overflow:hidden;margin-top:3px}
+  .flowbar i{display:block;height:100%;background:var(--up)}
+
+  /* ---- two-wallet / wash detection ---- */
+  .wallets{display:flex;gap:6px}
+  .wal{flex:1;background:var(--pane);border:1px solid var(--line);border-radius:5px;padding:4px 8px;min-width:0;
+       display:flex;align-items:baseline;gap:8px;font-variant-numeric:tabular-nums;font-size:10.5px;white-space:nowrap;overflow:hidden}
+  .wal b{font-size:12px;color:var(--accent);flex:0 0 auto}
+  .wal .m{color:var(--muted)}
+  .flag-CLEAN{color:var(--up)}
+  .flag-SUSPICIOUS{color:#f0900b}
+  .flag-WASH{color:var(--down)}
+  #washBtn.on{color:#0b0e11;background:var(--down)}
+
+  #err{display:none;position:fixed;inset:0;background:#0b0e11;color:#f6465d;padding:24px;font:13px/1.6 monospace;z-index:99}
+</style>
+</head>
+<body>
+<div id="err"></div>
+<div id="app">
+  <header>
+    <div class="brand">ZIG <b>PEG</b> ENGINE</div>
+    <div class="tick" id="tick-ZIGUSDT"><span class="sym">ZIG/USDT<span class="simchip">SIM</span></span><span class="px">—</span><span class="chg">—</span></div>
+    <div class="tick" id="tick-BTCUSDT"><span class="sym">BTC/USDT</span><span class="px">—</span><span class="chg">—</span></div>
+    <div class="status"><span class="dot" id="dot"></span><span id="statusText">connecting…</span></div>
+  </header>
+
+  <div class="toolbar" id="toolbar">
+    <button data-iv="1m">1m</button>
+    <button data-iv="5m">5m</button>
+    <button data-iv="15m">15m</button>
+    <button data-iv="30m">30m</button>
+    <button data-iv="1H">1H</button>
+    <button data-iv="4H">4H</button>
+    <button data-iv="1D">1D</button>
+    <span class="spacer"></span>
+    <span class="calib" id="calib">calibrating…</span>
+    <button id="washBtn" title="Toggle A&lt;-&gt;B wash trading in the simulation">wash: off</button>
+    <button id="dashToggle" title="Collapse / expand the engine dashboard (or drag its top edge)">▾ dash</button>
+  </div>
+
+  <div class="charts">
+    <div class="panel" id="panel-ZIGUSDT">
+      <div class="simwm">SIM</div>
+      <div class="pname">ZIG/USDT <span class="sim">SIM</span> · real flow + peg bot · <span data-ivlabel>1H</span></div>
+      <div class="kchart" id="chart-ZIGUSDT"></div>
+      <div class="countdown" id="cd-ZIGUSDT">—</div>
+    </div>
+    <div class="panel" id="panel-BTCUSDT">
+      <div class="pname">BTC/USDT · real · <span data-ivlabel>1H</span></div>
+      <div class="kchart" id="chart-BTCUSDT"></div>
+      <div class="countdown" id="cd-BTCUSDT">—</div>
+    </div>
+  </div>
+
+  <div class="splitter" id="splitter" title="Drag to resize"></div>
+  <div class="dash" id="dash">
+    <div class="dashL">
+      <div class="tiles">
+        <div class="tile"><div class="k">Sim ZIG</div><div class="v" id="t-price">—</div><div class="s" id="t-priceS">&nbsp;</div></div>
+        <div class="tile"><div class="k">BTC target</div><div class="v" id="t-target">—</div><div class="s" id="t-targetS">&nbsp;</div></div>
+        <div class="tile"><div class="k">Tracking err</div><div class="v" id="t-err">—</div><div class="s" id="t-errS">&nbsp;</div></div>
+        <div class="tile"><div class="k">Fill rate</div><div class="v" id="t-fill">—</div><div class="s" id="t-fillS">&nbsp;</div></div>
+        <div class="tile"><div class="k">Flow 60s</div><div class="v" id="t-ofi">—</div><div class="flowbar"><i id="t-flowbar" style="width:50%"></i></div></div>
+      </div>
+      <div class="tiles">
+        <div class="tile"><div class="k">Inventory</div><div class="v" id="t-inv">—</div><div class="s" id="t-invS">&nbsp;</div></div>
+        <div class="tile"><div class="k">Cash</div><div class="v" id="t-cash">—</div><div class="s" id="t-cashS">&nbsp;</div></div>
+        <div class="tile"><div class="k">Equity</div><div class="v" id="t-eq">—</div><div class="s" id="t-eqS">&nbsp;</div></div>
+        <div class="tile"><div class="k">P&amp;L</div><div class="v" id="t-pnl">—</div><div class="s" id="t-pnlS">&nbsp;</div></div>
+        <div class="tile"><div class="k">Runway</div><div class="v" id="t-run">—</div><div class="s" id="t-runS">&nbsp;</div></div>
+      </div>
+      <div class="tiles">
+        <div class="tile"><div class="k">Apparent vol</div><div class="v" id="t-avol">—</div><div class="s">what the tape shows</div></div>
+        <div class="tile"><div class="k">Real vol</div><div class="v" id="t-rvol">—</div><div class="s">actually moved price</div></div>
+        <div class="tile"><div class="k">Inflation</div><div class="v" id="t-infl">—</div><div class="s" id="t-inflS">&nbsp;</div></div>
+        <div class="tile"><div class="k">Implied wash</div><div class="v" id="t-wfrac">—</div><div class="s" id="t-wfracS">&nbsp;</div></div>
+        <div class="tile"><div class="k">Detection</div><div class="v" id="t-flag">—</div><div class="s" id="t-flagS">&nbsp;</div></div>
+      </div>
+      <div class="wallets" id="wallets"></div>
+      <div class="botrow">
+        <div class="verdict v-HOLD" id="verdict">
+          <div class="vb" id="v-badge">—</div>
+          <div class="vr" id="v-reason">waiting for engine…</div>
+          <div class="vs" id="v-size">&nbsp;</div>
+        </div>
+        <div class="tape">
+          <div class="th"><span>Peg bot interventions</span><span id="tape-sum">—</span></div>
+          <div id="tape"></div>
+        </div>
+      </div>
+    </div>
+    <div class="dashR">
+      <div class="cap">Normalized % · <b class="zig">SIM ZIG</b> vs <b class="btc">BTC target</b> — overlap = peg holding</div>
+      <div id="normChart"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+if (typeof klinecharts === 'undefined' || typeof LightweightCharts === 'undefined') {
+  const e = document.getElementById('err');
+  e.style.display = 'block';
+  e.textContent = 'Chart library failed to load from /vendor/. Restart the server (npm start), then hard-refresh.';
+  throw new Error('libs missing');
+}
+
+const SYMBOLS = ['ZIGUSDT', 'BTCUSDT'];
+const WS_IV = { '1m':'Min1','5m':'Min5','15m':'Min15','30m':'Min30','1H':'Min60','4H':'Hour4','1D':'Day1' };
+const IV_SEC = { '1m':60,'5m':300,'15m':900,'30m':1800,'1H':3600,'4H':14400,'1D':86400 };
+let interval = '1H';
+
+const panels = {};
+const firstClose = {};
+const lastPct = {};
+
+// ---- formatting -----------------------------------------------------------
+function priceDecimals(p){
+  if (p < 0.001) return 7;
+  if (p < 0.1)   return 6;
+  if (p < 10)    return 4;
+  if (p < 1000)  return 2;
+  return 1;
+}
+const en = (n, dp) => Number(n).toLocaleString('en-US', { minimumFractionDigits: dp, maximumFractionDigits: dp });
+const usd = (n) => (n < 0 ? '-$' : '$') + Math.abs(n).toLocaleString('en-US', { maximumFractionDigits: Math.abs(n) < 100 ? 2 : 0 });
+const compact = (n) => {
+  const a = Math.abs(n), s = n < 0 ? '-' : '';
+  if (a >= 1e9) return s + (a/1e9).toFixed(2) + 'B';
+  if (a >= 1e6) return s + (a/1e6).toFixed(2) + 'M';
+  if (a >= 1e3) return s + (a/1e3).toFixed(1) + 'K';
+  return s + a.toFixed(a < 10 ? 2 : 0);
+};
+function fmtRemain(s){
+  if (s < 0) s = 0;
+  const d = Math.floor(s/86400), h = Math.floor(s%86400/3600), m = Math.floor(s%3600/60), sec = Math.floor(s%60);
+  if (d > 0) return d + 'D ' + h + 'H';
+  if (h > 0) return h + 'H ' + m + 'M';
+  return m + ':' + String(sec).padStart(2, '0');
+}
+const hhmmss = (t) => { const d = new Date(t), z = (x) => String(x).padStart(2,'0'); return z(d.getHours())+':'+z(d.getMinutes())+':'+z(d.getSeconds()); };
+
+// ---- KLineChart styling tuned to MEXC -------------------------------------
+function makeStyles(dpRef){
+  const money = (n) => en(n, dpRef.v);
+  return {
+    grid: { horizontal: { color:'#1b2027', style:'solid' }, vertical: { color:'#1b2027', style:'solid' } },
+    candle: {
+      type: 'candle_solid',
+      bar: {
+        upColor:'#0ecb81', downColor:'#f6465d', noChangeColor:'#848e9c',
+        upBorderColor:'#0ecb81', downBorderColor:'#f6465d', noChangeBorderColor:'#848e9c',
+        upWickColor:'#0ecb81', downWickColor:'#f6465d', noChangeWickColor:'#848e9c',
+      },
+      priceMark: {
+        high:{ color:'#848e9c', textSize:10 }, low:{ color:'#848e9c', textSize:10 },
+        last: {
+          show:true, upColor:'#0ecb81', downColor:'#f6465d', noChangeColor:'#848e9c',
+          line:{ show:true, style:'dashed', dashedValue:[4,4], size:1 },
+          text:{ show:true, style:'fill', size:11, paddingLeft:4, paddingRight:4, paddingTop:2, paddingBottom:2, borderRadius:2, color:'#0b0e11' },
+        },
+      },
+      tooltip: {
+        showRule:'always', showType:'standard',
+        text:{ size:11, color:'#b7bdc6', marginLeft:8, marginTop:5, marginRight:8, marginBottom:0 },
+        custom: (d) => {
+          const c = d.current, p = d.prev || c;
+          const chg = c.close - c.open;
+          const chgPct = c.open ? (chg / c.open) * 100 : 0;
+          const amp = p.close ? ((c.high - c.low) / p.close) * 100 : 0;
+          const col = chg >= 0 ? '#0ecb81' : '#f6465d';
+          const t = new Date(c.timestamp), z = (x) => String(x).padStart(2,'0');
+          return [
+            { title:'Time',      value:`${t.getFullYear()}/${z(t.getMonth()+1)}/${z(t.getDate())} ${z(t.getHours())}:${z(t.getMinutes())}` },
+            { title:'Open',      value:{ text:money(c.open),  color:col } },
+            { title:'High',      value:{ text:money(c.high),  color:col } },
+            { title:'Low',       value:{ text:money(c.low),   color:col } },
+            { title:'Close',     value:{ text:money(c.close), color:col } },
+            { title:'Change',    value:{ text:(chg>=0?'+':'')+money(chg), color:col } },
+            { title:'Change%',   value:{ text:(chgPct>=0?'+':'')+chgPct.toFixed(2)+'%', color:col } },
+            { title:'Amplitude', value: amp.toFixed(2)+'%' },
+            { title:'Volume',    value: c.volume ? compact(c.volume) : '—' },
+          ];
+        },
+      },
+    },
+    indicator: { tooltip:{ showRule:'always', showName:true, showParams:true }, lastValueMark:{ show:false } },
+    crosshair: {
+      horizontal:{ line:{ color:'#5e6673', style:'dashed', dashedValue:[4,2], size:1 },
+                   text:{ style:'fill', backgroundColor:'#2b313a', color:'#eaecef', size:11, borderRadius:2, paddingLeft:4, paddingRight:4, paddingTop:2, paddingBottom:2 } },
+      vertical:{   line:{ color:'#5e6673', style:'dashed', dashedValue:[4,2], size:1 },
+                   text:{ style:'fill', backgroundColor:'#2b313a', color:'#eaecef', size:11, borderRadius:2, paddingLeft:4, paddingRight:4, paddingTop:2, paddingBottom:2 } },
+    },
+    xAxis:{ axisLine:{ color:'#1c2127' }, tickLine:{ color:'#1c2127' }, tickText:{ color:'#848e9c', size:11 } },
+    yAxis:{ type:'normal', position:'right', inside:false, axisLine:{ color:'#1c2127' }, tickLine:{ color:'#1c2127' }, tickText:{ color:'#848e9c', size:11 } },
+    separator:{ color:'#1c2127', size:1 },
+  };
+}
+const MA_COLORS = ['#f0b90b', '#e357b7', '#3fb6f0', '#a970ff'];
+
+function makePanel(symbol){
+  const el = document.getElementById('chart-' + symbol);
+  const dpRef = { v: 4 };
+  const chart = klinecharts.init(el, { styles: makeStyles(dpRef) });
+  chart.setOffsetRightDistance(60);
+  chart.createIndicator({ name:'MA', calcParams:[5,10,30,60], styles:{ lines: MA_COLORS.map((c)=>({ color:c })) } }, true, { id:'candle_pane' });
+  chart.createIndicator('VOL', false, { id:'vol_pane', height: 52 });
+  panels[symbol] = { symbol, chart, dpRef, lastBar: null };
+  new ResizeObserver(() => chart.resize()).observe(el);
+}
+SYMBOLS.forEach(makePanel);
+
+// ---- normalized sim-vs-target strip ---------------------------------------
+const { createChart, LineStyle } = LightweightCharts;
+const normEl = document.getElementById('normChart');
+const normChart = createChart(normEl, {
+  width: normEl.clientWidth, height: normEl.clientHeight,
+  layout:{ background:{ color:'#0b0e11' }, textColor:'#848e9c', fontSize:10 },
+  grid:{ vertLines:{ color:'#161b22' }, horzLines:{ color:'#161b22' } },
+  rightPriceScale:{ borderColor:'#1c2127' },
+  timeScale:{ borderColor:'#1c2127', timeVisible:true, secondsVisible:false },
+  crosshair:{ mode: LightweightCharts.CrosshairMode.Normal },
+});
+new ResizeObserver(() => normChart.applyOptions({ width: normEl.clientWidth, height: normEl.clientHeight })).observe(normEl);
+const pctFmt = { type:'custom', minMove:0.01, formatter:(v)=>(v>=0?'+':'')+v.toFixed(1)+'%' };
+const normSeries = {
+  ZIGUSDT: normChart.addLineSeries({ color:'#f0b90b', lineWidth:2, lineStyle: LineStyle.Dashed, priceFormat: pctFmt }),
+  BTCUSDT: normChart.addLineSeries({ color:'#3fb6f0', lineWidth:2, priceFormat: pctFmt }),
+};
+const normZero = normChart.addLineSeries({ color:'#2b313a', lineWidth:1, lineStyle: LineStyle.Dashed, lastValueVisible:false, priceLineVisible:false, crosshairMarkerVisible:false });
+
+// ---- history --------------------------------------------------------------
+async function loadHistory(){
+  let span = null;
+  // persisted simulated bars — these survive restarts and take over from real
+  // ZIG history at the point the engine first ran
+  let simCandles = [];
+  try {
+    const r = await (await fetch(`/api/sim-history?interval=${interval}&limit=1000`)).json();
+    simCandles = r.candles || [];
+  } catch {}
+
+  for (const s of SYMBOLS){
+    let { candles } = await (await fetch(`/api/history?symbol=${s}&interval=${interval}&limit=1000`)).json();
+    if (!candles || !candles.length) continue;
+    if (s === 'ZIGUSDT' && simCandles.length){
+      const simStart = simCandles[0].time;
+      candles = candles.filter((c) => c.time < simStart).concat(simCandles);
+    }
+    const klines = candles.map((c) => ({ timestamp:c.time*1000, open:c.open, high:c.high, low:c.low, close:c.close, volume:c.volume }));
+    const dp = priceDecimals(candles[candles.length-1].close);
+    const st = panels[s];
+    st.dpRef.v = dp;
+    st.chart.setPriceVolumePrecision(dp, 2);
+    st.chart.applyNewData(klines);
+    st.lastBar = { ...klines[klines.length-1] };
+    firstClose[s] = candles[0].close;
+    normSeries[s].setData(candles.map((c) => ({ time:c.time, value:(c.close/firstClose[s]-1)*100 })));
+    span = { from: candles[0].time, to: candles[candles.length-1].time };
+  }
+  if (span) normZero.setData([{ time:span.from, value:0 }, { time:span.to, value:0 }]);
+  normChart.timeScale().fitContent();
+}
+
+async function loadTickers(){
+  try {
+    const t = await (await fetch('/api/ticker?symbol=BTCUSDT')).json();
+    lastPct.BTCUSDT = +t.priceChangePercent * 100;
+    paintTicker('BTCUSDT', +t.lastPrice, lastPct.BTCUSDT);
+  } catch {}
+  try {
+    const t = await (await fetch('/api/ticker?symbol=ZIGUSDT')).json();
+    lastPct.ZIGUSDT = +t.priceChangePercent * 100;
+    paintTicker('ZIGUSDT', +t.lastPrice, lastPct.ZIGUSDT);
+  } catch {}
+}
+function paintTicker(symbol, price, pct){
+  const box = document.getElementById('tick-' + symbol);
+  box.querySelector('.px').textContent = en(price, panels[symbol].dpRef.v);
+  const chg = box.querySelector('.chg');
+  chg.textContent = (pct >= 0 ? '+' : '') + pct.toFixed(2) + '% 24h';
+  chg.style.color = pct >= 0 ? 'var(--up)' : 'var(--down)';
+  box.querySelector('.px').style.color = pct >= 0 ? 'var(--up)' : 'var(--down)';
+}
+function flashTicker(symbol, side){
+  const box = document.getElementById('tick-' + symbol);
+  box.classList.remove('flash-up','flash-down');
+  void box.offsetWidth;
+  box.classList.add(side === 'sell' ? 'flash-down' : 'flash-up');
+  setTimeout(() => box.classList.remove('flash-up','flash-down'), 180);
+}
+
+// ---- candle plumbing ------------------------------------------------------
+function feedBar(symbol, bar, mode){
+  const st = panels[symbol];
+  if (!st) return;
+  if (!st.lastBar || bar.timestamp > st.lastBar.timestamp){
+    st.lastBar = { ...bar };
+  } else if (bar.timestamp === st.lastBar.timestamp){
+    if (mode === 'tick'){
+      st.lastBar.close = bar.close;
+      st.lastBar.high = Math.max(st.lastBar.high, bar.close);
+      st.lastBar.low  = Math.min(st.lastBar.low,  bar.close);
+      st.lastBar.volume = (st.lastBar.volume || 0) + (bar.volume || 0);
+    } else {
+      st.lastBar = { ...bar };
+    }
+  } else return;
+  st.chart.updateData({ ...st.lastBar });
+  if (firstClose[symbol]){
+    normSeries[symbol].update({ time: st.lastBar.timestamp/1000, value: (st.lastBar.close/firstClose[symbol]-1)*100 });
+  }
+}
+
+// ---- engine dashboard -----------------------------------------------------
+const tape = [];
+let lastDash = 0;
+function onEngine(m){
+  // sim ZIG candle is driven by the engine price (real flow + peg bot)
+  const secs = IV_SEC[interval];
+  const bucket = Math.floor(m.t/1000/secs)*secs*1000;
+  feedBar('ZIGUSDT', { timestamp: bucket, open: m.price, high: m.price, low: m.price, close: m.price, volume: m.volDelta || 0 }, 'tick');
+  paintTicker('ZIGUSDT', m.price, lastPct.ZIGUSDT ?? 0);
+
+  if (m.bot){
+    flashTicker('ZIGUSDT', m.bot.side);
+    tape.unshift({ ...m.bot, t: m.t });
+    if (tape.length > 7) tape.pop();
+  }
+  const now = performance.now();
+  if (now - lastDash < 160) return;         // throttle DOM writes to ~6Hz
+  lastDash = now;
+  renderDash(m);
+}
+
+const $ = (id) => document.getElementById(id);
+function renderDash(m){
+  const dp = panels.ZIGUSDT.dpRef.v;
+  const L = m.ledger, R = m.risk, F = m.flow;
+
+  $('t-price').textContent  = en(m.price, dp);
+  $('t-priceS').textContent = 'anchor ' + en(m.calib.anchorZig, dp);
+  $('t-target').textContent = en(m.target, dp);
+  $('t-targetS').textContent = 'btc ' + Math.round(m.calib.anchorBtc).toLocaleString('en-US');
+
+  const ae = Math.abs(m.errBps);
+  $('t-err').textContent = (m.errBps >= 0 ? '+' : '') + m.errBps.toFixed(1) + ' bps';
+  $('t-err').style.color = ae < 25 ? 'var(--up)' : ae < 60 ? 'var(--accent)' : 'var(--down)';
+  $('t-errS').textContent = 'rms ' + R.rmsErrBps.toFixed(1) + ' bps';
+
+  const fr = (R.fillRatio ?? 1) * 100;
+  $('t-fill').textContent = fr.toFixed(0) + '%';
+  $('t-fill').style.color = fr > 95 ? 'var(--up)' : fr > 50 ? 'var(--accent)' : 'var(--down)';
+  $('t-fillS').textContent = R.depthLimited ? 'depth-limited' : 'unconstrained';
+
+  $('t-ofi').textContent = compact(F.ofi) + ' ZIG';
+  $('t-ofi').style.color = F.ofi >= 0 ? 'var(--up)' : 'var(--down)';
+  $('t-flowbar').style.width = (F.buyRatio * 100).toFixed(0) + '%';
+
+  $('t-inv').textContent  = compact(L.inv) + ' ZIG';
+  $('t-invS').textContent = usd(L.inv * m.price);
+  $('t-cash').textContent = usd(L.cash);
+  $('t-cashS').textContent = 'fees ' + usd(L.fees);
+  $('t-eq').textContent   = usd(L.equity);
+  $('t-eqS').textContent  = 'start ' + usd(L.equity0);
+  $('t-pnl').textContent  = usd(L.pnl);
+  $('t-pnl').style.color  = L.pnl >= 0 ? 'var(--up)' : 'var(--down)';
+  $('t-pnlS').textContent = ((L.pnl / L.equity0) * 100).toFixed(3) + '%';
+
+  $('t-run').textContent  = R.runwayMin == null ? '∞' : fmtRemain(R.runwayMin * 60);
+  $('t-run').style.color  = R.runwayMin == null ? 'var(--up)' : R.runwayMin > 240 ? 'var(--up)' : R.runwayMin > 60 ? 'var(--accent)' : 'var(--down)';
+  $('t-runS').textContent = (R.burnPerMin >= 0 ? '+' : '') + usd(R.burnPerMin) + '/min';
+
+  const v = $('verdict');
+  v.className = 'verdict v-' + R.verdict;
+  $('v-badge').textContent = R.verdict;
+  $('v-reason').textContent = R.reason;
+  $('v-size').textContent = R.suggestUSDT > 0
+    ? 'top up ' + usd(R.suggestUSDT) + ' for 1h runway'
+    : 'bot volume ' + usd(L.botVolUSDT) + ' · ' + L.botTicks.toLocaleString('en-US') + ' fills';
+
+  // ---- two-wallet / wash detection ----
+  const D = m.detect;
+  if (D){
+    $('t-avol').textContent = usd(D.apparentVolUSDT);
+    $('t-rvol').textContent = usd(D.realVolUSDT);
+    $('t-infl').textContent = D.inflation.toFixed(1) + '×';
+    $('t-infl').style.color = D.inflation > 3 ? 'var(--down)' : D.inflation > 1.5 ? 'var(--accent)' : 'var(--up)';
+    $('t-inflS').textContent = usd(D.washVolUSDT) + ' washed';
+
+    const wf = D.impliedWashFrac;
+    $('t-wfrac').textContent = wf == null ? '—' : (wf * 100).toFixed(1) + '%';
+    $('t-wfrac').style.color = wf == null ? 'var(--muted)' : wf > 0.7 ? 'var(--down)' : wf > 0.4 ? 'var(--accent)' : 'var(--up)';
+    $('t-wfracS').textContent = 'λ ratio ' +
+      (D.lambdaApparent ? (D.lambdaApparent / D.lambdaTrue).toFixed(3) : '—');
+
+    $('t-flag').textContent = D.flag;
+    $('t-flag').className = 'v flag-' + (D.flag.startsWith('WASH') ? 'WASH' : D.flag);
+    $('t-flagS').textContent = D.note;
+
+    $('wallets').innerHTML = (m.wallets || []).map((w) =>
+      `<div class="wal"><b>${w.id}</b>` +
+      `<span>${usd(w.value)}</span>` +
+      `<span class="m">cash ${usd(w.cash)}</span>` +
+      `<span class="m">${compact(w.inv)} ZIG</span>` +
+      `<span class="m">peg ${w.fills}</span>` +
+      `<span class="m">wash ${w.washFills}</span>` +
+      `<span class="m">fees ${usd(w.fees)}</span></div>`).join('');
+  }
+
+  $('tape-sum').textContent = 'bought ' + compact(L.botBought) + ' / sold ' + compact(L.botSold) + ' ZIG';
+  $('tape').innerHTML = tape.map((x) =>
+    `<div class="row"><span class="sd ${x.side}">${x.side.toUpperCase()}</span>` +
+    `<span class="q">${compact(x.qty)}</span>` +
+    `<span class="p">${en(x.price, dp)}</span>` +
+    `<span class="n">${usd(x.notional)}</span>` +
+    `<span class="tm">${hhmmss(x.t)}</span></div>`).join('');
+
+  const S = m.session || {};
+  $('calib').textContent =
+    `λ ${m.calib.lambda.toExponential(2)} /ZIG · depth ${compact(m.calib.volPerSec)} ZIG/s · gain ${m.calib.gain}` +
+    ` · ${S.resumed ? 'resumed' : 'fresh'} run ${fmtRemain((S.runtimeMs || 0) / 1000)} · ${(S.bars || 0).toLocaleString('en-US')} sim bars saved`;
+}
+
+// ---- websocket ------------------------------------------------------------
+let ws;
+function connectWs(){
+  ws = new WebSocket(`ws://${location.host}/stream`);
+  ws.onopen = () => ws.send(JSON.stringify({ type:'interval', value: interval }));
+  ws.onclose = () => { setStatus(false, 'reconnecting…'); setTimeout(connectWs, 1500); };
+  ws.onmessage = (ev) => {
+    const m = JSON.parse(ev.data);
+    if (m.type === 'status'){ setStatus(m.upstream, m.upstream ? 'live' : 'MEXC feed down'); return; }
+    if (m.type === 'engine'){ onEngine(m); return; }
+    if (m.symbol !== 'BTCUSDT') return;     // real ZIG feed is consumed by the engine server-side
+
+    if (m.type === 'kline'){
+      if (m.wsInterval && m.wsInterval !== WS_IV[interval]) return;
+      const c = m.candle;
+      feedBar('BTCUSDT', { timestamp:c.time*1000, open:c.open, high:c.high, low:c.low, close:c.close, volume:c.volume }, 'full');
+    } else if (m.type === 'trade'){
+      const secs = IV_SEC[interval];
+      const bucket = Math.floor(m.time/1000/secs)*secs*1000;
+      const st = panels.BTCUSDT;
+      const base = st.lastBar && bucket === st.lastBar.timestamp
+        ? { timestamp:bucket, open:st.lastBar.open, high:st.lastBar.high, low:st.lastBar.low, close:m.price, volume:0 }
+        : { timestamp:bucket, open:m.price, high:m.price, low:m.price, close:m.price, volume:0 };
+      feedBar('BTCUSDT', base, 'tick');
+      paintTicker('BTCUSDT', m.price, lastPct.BTCUSDT ?? 0);
+      flashTicker('BTCUSDT', m.side);
+    }
+  };
+}
+function setStatus(on, text){
+  document.getElementById('dot').classList.toggle('on', !!on);
+  document.getElementById('statusText').textContent = text;
+}
+
+setInterval(async () => {
+  for (const s of SYMBOLS){
+    try { const t = await (await fetch(`/api/ticker?symbol=${s}`)).json(); lastPct[s] = +t.priceChangePercent * 100; } catch {}
+  }
+}, 30000);
+
+setInterval(() => {
+  const secs = IV_SEC[interval], now = Date.now()/1000;
+  for (const s of SYMBOLS){
+    const st = panels[s], cd = document.getElementById('cd-' + s);
+    cd.textContent = st.lastBar ? fmtRemain(st.lastBar.timestamp/1000 + secs - now) : '—';
+  }
+}, 1000);
+
+// ---- interval switcher ----------------------------------------------------
+const toolbar = document.getElementById('toolbar');
+function setActive(){
+  [...toolbar.querySelectorAll('button')].forEach((b) => b.classList.toggle('active', b.dataset.iv === interval));
+  document.querySelectorAll('[data-ivlabel]').forEach((n) => (n.textContent = interval));
+}
+toolbar.addEventListener('click', async (e) => {
+  const b = e.target.closest('button'); if (!b) return;
+  interval = b.dataset.iv; setActive();
+  await loadHistory();
+  if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type:'interval', value: interval }));
+});
+
+// ---- resizable / collapsible dashboard ------------------------------------
+const dashEl = document.getElementById('dash');
+const splitEl = document.getElementById('splitter');
+const dashBtn = document.getElementById('dashToggle');
+let dashH = Math.max(80, Math.min(+(localStorage.getItem('dashH') || 218), 600));
+let dashCollapsed = localStorage.getItem('dashCollapsed') === '1';
+
+function applyDash(){
+  dashEl.style.flexBasis = dashH + 'px';
+  dashEl.classList.toggle('collapsed', dashCollapsed);
+  splitEl.classList.toggle('collapsed', dashCollapsed);
+  dashBtn.textContent = dashCollapsed ? '▴ dash' : '▾ dash';
+  requestAnimationFrame(() => {
+    for (const s of SYMBOLS) panels[s].chart.resize();
+    normChart.applyOptions({ width: normEl.clientWidth, height: normEl.clientHeight });
+  });
+}
+dashBtn.addEventListener('click', () => {
+  dashCollapsed = !dashCollapsed;
+  localStorage.setItem('dashCollapsed', dashCollapsed ? '1' : '0');
+  applyDash();
+});
+splitEl.addEventListener('mousedown', (e) => {
+  e.preventDefault();
+  splitEl.classList.add('drag');
+  const y0 = e.clientY, h0 = dashH;
+  const move = (ev) => {
+    dashH = Math.max(80, Math.min(h0 - (ev.clientY - y0), window.innerHeight - 220));
+    applyDash();
+  };
+  const up = () => {
+    splitEl.classList.remove('drag');
+    localStorage.setItem('dashH', String(Math.round(dashH)));
+    document.removeEventListener('mousemove', move);
+    document.removeEventListener('mouseup', up);
+  };
+  document.addEventListener('mousemove', move);
+  document.addEventListener('mouseup', up);
+});
+window.addEventListener('resize', () => applyDash());
+
+// ---- wash toggle ----------------------------------------------------------
+const washBtn = document.getElementById('washBtn');
+let washOn = false;
+function paintWashBtn(){
+  washBtn.textContent = 'wash: ' + (washOn ? 'on' : 'off');
+  washBtn.classList.toggle('on', washOn);
+}
+washBtn.addEventListener('click', async () => {
+  washOn = !washOn;
+  paintWashBtn();
+  try {
+    await fetch('/api/engine', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ washEnabled: washOn }),
+    });
+  } catch {}
+});
+fetch('/api/engine').then((r) => r.json()).then((j) => { washOn = !!j.cfg.washEnabled; paintWashBtn(); }).catch(() => {});
+
+(async function init(){
+  setActive();
+  applyDash();
+  await loadHistory();
+  await loadTickers();
+  connectWs();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,30 @@
+services:
+  btczig:
+    build: .
+    image: btczig-peg:latest
+    container_name: btczig
+
+    # Published to loopback only. The app reaches it at 127.0.0.1:5173 on the
+    # host; nothing is exposed to the internet. Drop the "127.0.0.1:" prefix
+    # (or put a reverse proxy in front) if you need it reachable remotely.
+    ports:
+      - "127.0.0.1:5173:5173"
+
+    # ledger + simulated bars live here, so `docker compose down && up` resumes
+    volumes:
+      - ./state:/app/state
+
+    environment:
+      PORT: "5173"
+      HOST: "0.0.0.0"      # must be 0.0.0.0 inside the container for the port map to work
+      REPORT_MIN: "30"     # match report to the log every N minutes
+      TZ: "UTC"
+
+    restart: unless-stopped
+    stop_grace_period: 20s  # room to flush state and print the final report
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"

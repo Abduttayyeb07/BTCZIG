@@ -1,0 +1,26 @@
+# deps
+node_modules/
+npm-debug.log*
+yarn-error.log*
+
+# engine state — ledger + simulated bars, regenerated at runtime
+state/
+
+# logs
+*.log
+run.log
+server.log
+
+# NOTE: public/vendor/*.js is deliberately NOT ignored. Those libs are vendored
+# so the page loads with no CDN; ignoring them would break a fresh clone.
+# `npm run vendor` re-fetches them if they ever go missing.
+
+# scratch
+*.tmp
+.DS_Store
+Thumbs.db
+
+# editors
+.vscode/
+.idea/
+*.swp
