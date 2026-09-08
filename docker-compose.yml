@@ -23,6 +23,16 @@ services:
       # 1 = block POST /api/engine. Set this whenever the URL is shared, so a
       # viewer cannot reconfigure or reset a run that is being measured.
       READONLY: "${READONLY:-0}"
+      # Engine tuning, applied at startup. Needed because READONLY=1 blocks
+      # POST /api/engine, so .env is the only way to configure a shared server.
+      # Empty values are ignored and the built-in default is used.
+      ENGINE_TRACKMODE: "${ENGINE_TRACKMODE:-}"
+      ENGINE_TRACKBETA: "${ENGINE_TRACKBETA:-}"
+      ENGINE_MAXPARTICIPATION: "${ENGINE_MAXPARTICIPATION:-}"
+      ENGINE_GAIN: "${ENGINE_GAIN:-}"
+      ENGINE_FEEDFORWARD: "${ENGINE_FEEDFORWARD:-}"
+      ENGINE_CAPITALUSDT: "${ENGINE_CAPITALUSDT:-}"
+      ENGINE_WASHENABLED: "${ENGINE_WASHENABLED:-}"
 
     restart: unless-stopped
     stop_grace_period: 20s  # room to flush state and print the final report
@@ -49,9 +59,12 @@ services:
       # still encrypted and password-protected, but browsers warn once.
       - "${CADDY_PORT:-443}:${CADDY_PORT:-443}"
     environment:
-      SITE_ADDRESS: "${SITE_ADDRESS:?set SITE_ADDRESS in .env}"
-      BASIC_AUTH_USER: "${BASIC_AUTH_USER:?set BASIC_AUTH_USER in .env}"
-      BASIC_AUTH_HASH: "${BASIC_AUTH_HASH:?set BASIC_AUTH_HASH in .env}"
+      # Plain defaults, not "${VAR:?}" -- the required-variable form is evaluated
+      # for the whole file even when this profile is not active, which breaks
+      # every other compose command on a host with no .env.
+      SITE_ADDRESS: "${SITE_ADDRESS:-http://:8888}"
+      BASIC_AUTH_USER: "${BASIC_AUTH_USER:-admin}"
+      BASIC_AUTH_HASH: "${BASIC_AUTH_HASH:-}"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data      # certificates live here - keep this volume

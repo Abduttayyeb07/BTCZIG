@@ -274,7 +274,30 @@ server.listen(PORT, HOST, () => {
 // ---------------------------------------------------------------------------
 // peg engine — real MEXC flow in, cost-of-peg out
 // ---------------------------------------------------------------------------
-const engine = new PegEngine();
+// Engine config from the environment, so a deployment can be tuned in .env at
+// startup. This matters because READONLY=1 blocks POST /api/engine, which
+// would otherwise be the only way to change these -- a read-only server would
+// silently run defaults forever.
+//   ENGINE_TRACKMODE=beta ENGINE_TRACKBETA=0.95 ENGINE_MAXPARTICIPATION=5 ...
+function cfgFromEnv() {
+  const out = {};
+  for (const key of Object.keys(ENGINE_DEFAULTS)) {
+    const raw = process.env['ENGINE_' + key.toUpperCase()];
+    if (raw === undefined || raw === '') continue;
+    const def = ENGINE_DEFAULTS[key];
+    if (typeof def === 'boolean') out[key] = raw === '1' || raw.toLowerCase() === 'true';
+    else if (typeof def === 'string') out[key] = raw;
+    else {
+      const v = Number(raw);
+      if (Number.isFinite(v)) out[key] = v;
+    }
+  }
+  return out;
+}
+const ENV_CFG = cfgFromEnv();
+if (Object.keys(ENV_CFG).length) console.log('[engine] config from env:', JSON.stringify(ENV_CFG));
+
+const engine = new PegEngine(ENV_CFG);
 let engineTimer = null;
 let lastEngineState = null;
 
@@ -370,6 +393,9 @@ async function calibrateEngine({ resume = true } = {}) {
       // keep the ledger, but re-read liquidity from today's market
       engine.lambda = freshLambda;
       engine.volPerSec = freshVol;
+      // restore() replays the saved cfg; the environment must still win, or a
+      // resumed run would silently ignore what .env now says
+      Object.assign(engine.cfg, ENV_CFG);
       const bars = readJSON(BARS_FILE);
       if (bars && Array.isArray(bars.bars)) engine.bars1m = bars.bars.slice(-engine.cfg.maxBars);
       const eq = engine.cash + engine.inv * Math.exp(engine.lnP);
